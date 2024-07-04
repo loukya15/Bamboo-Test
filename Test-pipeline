@@ -1,0 +1,204 @@
+pipeline {
+    agent
+    {
+        node{
+            label 'master'
+        }
+    }
+
+    stages 
+    {
+        stage('Start') {
+            steps {
+                echo 'Start PlayGround Env Creation'
+            }
+        }
+
+        stage ('create vpd infra') {
+            steps {
+                build job: '901-vpd-infra', wait: true,
+                parameters: [
+                   [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch],
+                    [$class: 'StringParameterValue', name: 'VpcCidr', value: VpcCidr],
+                    [$class: 'StringParameterValue', name: 'PublicSubnet1CIDR', value: PublicSubnet1CIDR],
+                    [$class: 'StringParameterValue', name: 'PublicSubnet2CIDR', value: PublicSubnet2CIDR],
+                    [$class: 'StringParameterValue', name: 'PrivateSubnet1CIDR', value: PrivateSubnet1CIDR],
+                    [$class: 'StringParameterValue', name: 'PrivateSubnet2CIDR', value: PrivateSubnet2CIDR],
+                    [$class: 'BooleanParameterValue', name: 'createVPC', value: true]
+                ]
+            }
+        }
+
+        stage ('create vpd common resources') {
+            steps {
+                build job: '902-vpd-common-resources', wait: true,
+                parameters: [
+                   [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }
+
+         stage ('copy ML files') {
+            steps {                
+                sh '''
+                    aws_profile=$Project"_"$EnvName
+                    artifacts_store="${Project}-${EnvName}-artifactsstore"
+                    artifactsstore_s3_bucket=`sudo aws cloudformation list-exports --query Exports[?Name=="'"$artifacts_store"'"].Value --output text --region "${AWS_Region}" --profile $aws_profile `
+                    echo "Delete files existing"
+					sudo aws s3 rm s3://$artifactsstore_s3_bucket/vpd-ml-models/ --recursive --profile $aws_profile
+					echo "Files deleted!!!"
+					echo "Copying files.."
+					sudo aws s3 sync s3://vpd-qa-artifactsstore-us-east-1/vpd-ml-models/ s3://$artifactsstore_s3_bucket/vpd-ml-models/ --profile $aws_profile
+                    echo "Copied succesfully!!"
+				'''
+            }
+        }
+        stage ('create 911 screensegmentation') {
+            steps {
+                build job: '911-vpd-screensegmentation', wait: true,
+                parameters: [
+                    [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch],
+                    [$class: 'BooleanParameterValue', name: 'DeployDocker', value: true]
+                ]
+            }
+        }
+        stage ('create 913 processanalysis') {
+            steps {
+                build job: '913-vpd-processanalysis', wait: true, 
+                parameters: [
+                   [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }
+
+
+        stage ('create 903 agent micro service') {
+            steps {
+                build job: '903-vpd-agentmicroservice',
+                parameters: [
+                    [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }
+        stage ('create 904 baseline microservice') {
+            steps {
+                build job: '904-vpd-baselinelabelmicroservice',
+                parameters: [
+                    [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }
+        stage ('create 905 batch microservice') {
+            steps {
+                build job: '905-vpd-batchmicroservice',
+                parameters: [
+                    [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch],
+                    [$class: 'BooleanParameterValue', name: 'DeployDocker', value: true]
+                ]
+            }
+        }
+        stage ('create 906 businessprocess microservice') {
+            steps {
+                build job: '906-vpd-businessprocessmicroservice',
+                parameters: [
+                    [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }
+        stage ('create 907 customer microservice') {
+            steps {
+                build job: '907-vpd-customermicroservice', 
+                parameters: [
+                    [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }
+        stage ('create 908 jobanalysis microservice') {
+            steps {
+                build job: '908-vpd-jobanalysismicroservice', 
+                parameters: [
+                    [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }
+        stage ('create 909 publish result microservice') {
+            steps {
+                build job: '909-vpd-publishresultsmicroservice',  
+                parameters: [
+                    [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch],
+                    [$class: 'BooleanParameterValue', name: 'DeployDocker', value: true]
+                ]
+            }
+        }
+        stage ('create 910 event microservice') {
+            steps {
+                build job: '910-vpd-eventmicroservice', 
+                parameters: [
+                    [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }
+        
+        stage ('create 912 processgraph microservice') {
+            steps {
+                build job: '912-vpd-processgraphmicroservice', 
+                parameters: [
+                    [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }     
+
+       stage ('create 914 download microservice') {
+            steps {
+                build job: '914-vpd-downloadfilesmicroservice',  
+                parameters: [
+                     [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }
+        stage ('create 915 console') {
+            steps {
+                build job: '915-vpd-webapp-console', 
+                parameters: [
+                   [$class: 'StringParameterValue', name: 'AWS_Region', value: AWS_Region],
+                    [$class: 'StringParameterValue', name: 'EnvName', value: EnvName],
+                    [$class: 'StringParameterValue', name: 'Branch', value: Branch]
+                ]
+            }
+        }
+
+        stage('End') {
+            steps {
+                echo 'Completed PlayGround Env Creation'
+            }
+        }
+    }
+}
